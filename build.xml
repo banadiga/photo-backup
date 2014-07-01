@@ -1,0 +1,223 @@
+<project name="Photo backup" basedir="." default="build">
+
+    <!-- Load configuration prolert from file. -->
+    <loadproperties srcFile="backup.properties" />
+
+    <!-- Define build property. -->
+    <property name="build.dir" location="build" />
+    <property name="build.checksum.dir" location="${build.dir}/checksum" />
+    <property name="date.separator" location="." />
+
+    <!-- Add lib. -->
+    <taskdef resource="net/sf/antcontrib/antlib.xml">
+        <classpath>
+            <pathelement location="lib/ant-contrib-1.0b3.jar" />
+        </classpath>
+    </taskdef>
+
+    <macrodef name="log">
+        <attribute name="message" />
+        <attribute name="level" default="info" />
+        <sequential>
+            <local name="current.time" />
+            <tstamp>
+                <format property="current.time" pattern="dd/MM/yyyy hh:mm:ss" />
+            </tstamp>
+            <echo message="${current.time} | @{message}" level="@{level}" />
+        </sequential>
+    </macrodef>
+
+    <!-- Remove build directory. -->
+    <target name="clean">
+        <log message="Removing `${build.dir}` directory." />
+        <delete includeEmptyDirs="true" failOnError="false">
+            <fileset dir="${build.dir}" includes="**/*" defaultExcludes="no" />
+        </delete>
+    </target>
+
+    <!-- Pre run process. Clean build directory. -->
+    <target name="create-build-dir" depends="clean">
+        <log message="Re-creating `${build.dir}` directory." />
+        <mkdir dir="${build.dir}" />
+    </target>
+
+    <!-- Check if directories for selected month exists. -->
+    <target name="check-if-month-exists">
+        <log message="Checking month`s directories..." />
+
+        <!-- Patterns for photo file names which should be taken into account. -->
+        <patternset id="photo-files">
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.JPG" />
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.RAW" />
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.NEF" />
+
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.jpg" />
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.raw" />
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.nef" />
+        </patternset>
+
+        <!-- Get list of files. -->
+        <property name="dir" location="${src.dir}/${this.year}" />
+        <fileset dir="${dir}" id="checkdir">
+            <patternset refId="photo-files" />
+        </fileset>
+
+        <!-- Check if list of files is empty. -->
+        <condition property="month.dir.exists">
+            <not>
+                <equals arg1="${toString:checkdir}" arg2="" />
+            </not>
+        </condition>
+
+        <!-- Display the result of check.-->
+        <if>
+            <equals arg1="${month.dir.exists}" arg2="true" />
+            <then>
+                <log message="Month `${this.month}` in year `${this.year}` exist." />
+            </then>
+            <else>
+                <log level="warning" message="Month `${this.month}` in year `${this.year}` not exist." />
+            </else>
+        </if>
+    </target>
+
+    <!-- Check if file was changed. -->
+    <target name="check-if-file-is-changed" depends="check-if-month-exists,create-build-dir" if="month.dir.exists">
+        <!-- Ggenerate checksum. -->
+        <log message="Generating checksum for `${this.month}.${this.year}`..." />
+        <checksum totalProperty="checksum.of.all" toDir="${build.dir}">
+            <fileset dir="${dir}">
+                <patternset refId="photo-files" />
+            </fileset>
+        </checksum>
+
+        <property name="checksum.file" value="${this.year}${date.separator}${this.month}.sum" />
+        <log message="Writing checksum: `${checksum.of.all}` to file `${checksum.file}`" />
+        <echo file="${build.checksum.dir}/${checksum.file}" message="${checksum.of.all}" />
+
+        <loadfile property="checksum.of.dec" srcFile="${target.sum.dir}/${checksum.file}" failOnError="false" />
+
+        <!-- Check if checksum was changed or it is first run. -->
+        <condition property="checksum.changed">
+            <or>
+                <equals arg1="${checksum.of.all}" arg2="${checksum.of.dec}" />
+                <equals arg1="${checksum.of.dec}" arg2="" />
+            </or>
+        </condition>
+
+        <!-- Display the result of check.-->
+        <if>
+            <equals arg1="${checksum.changed}" arg2="true" />
+            <then>
+                <log message="Checksum was no changed." />
+            </then>
+            <else>
+                <log level="warning" message="Checksum was changed." />
+            </else>
+        </if>
+    </target>
+
+    <!-- Archive file for selected month. -->
+    <target name="archive-photos-for-month" depends="check-if-file-is-changed" if="month.dir.exists" unless="checksum.changed">
+        <log message="Runing process for `${this.month}.${this.year}`." />
+
+        <!-- Counting pthoto files -->
+        <log message="Counting photo files in `${this.month}.${this.year}`" />
+        <resourcecount property="count.files">
+            <fileset dir="${dir}">
+                <patternset refId="photo-files" />
+            </fileset>
+        </resourcecount>
+        <log level="warning" message="There are ${count.files} photo files in `${this.month}.${this.year}`" />
+
+        <!-- Create arhive with photo files. -->
+        <property name="tar.file" location="${build.dir}/${this.year}${date.separator}${this.month}.tar" />
+        <property name="zip.file" location="${build.dir}/${this.year}${date.separator}${this.month}.zip" />
+        <log message="Creating tar archive..." />
+
+        <tar destFile="${tar.file}" compression="none">
+            <fileset dir="${dir}">
+                <patternset refId="photo-files" />
+            </fileset>
+        </tar>
+
+        <log message="Creating zip archive..." />
+        <zip destFile="${zip.file}" compress="false" baseDir="${build.dir}" includes="${this.year}${date.separator}${this.month}.tar" />
+
+        <!-- Move archives to target directory -->
+        <log message="Copying checksum file to target directory." />
+        <copy file="${build.checksum.dir}/${checksum.file}" toDir="${target.sum.dir}" />
+
+        <log message="Copying zip file to target directory" />
+        <copy file="${zip.file}" toDir="${target.zip.dir}" />
+
+    </target>
+
+    <!-- Check if directory for selected year exists. -->
+    <target name="check-if-year-exists">
+        <log message="Checking if year`s directory `${src.dir}/${this.year}` exists." />
+        <condition property="year.dir.exists">
+            <available file="${src.dir}/${this.year}" type="dir" />
+        </condition>
+
+        <!-- Display the result of check.-->
+        <if>
+            <equals arg1="${year.dir.exists}" arg2="true" />
+            <then>
+                <log message="Year `${this.year}` exist." />
+            </then>
+            <else>
+                <log level="warning" message="Year `${this.year}` does not exist." />
+            </else>
+        </if>
+    </target>
+
+    <!-- Run process for selected year -->
+    <target name="archive-photos-for-year" depends="check-if-year-exists" if="year.dir.exists">
+        <log message="Runing process for year `${this.year}`." />
+        <foreach target="archive-photos-for-month" parallel="false" list="01,02,03,04,05,06,07,08,09,10,11,12" param="this.month" trim="true" />
+    </target>
+
+    <!-- Run process. -->
+    <target name="archive-photos" depends="create-build-dir">
+        <log message="Archive photos started..." />
+        <foreach target="archive-photos-for-year" parallel="false" list="${years}" param="this.year" trim="true" />
+    </target>
+
+    <!-- Post run process. Display statistics -->
+    <target name="print-statiscs" depends="clean">
+        <log message="Statistic:" />
+
+        <!-- Calculation count of zips files. -->
+        <resourcecount property="count.zips">
+            <fileset dir="${target.zip.dir}">
+                <include name="*.zip" />
+            </fileset>
+        </resourcecount>
+        <log message="There are ${count.zips} zipfiles in `${target.zip.dir}`." />
+
+        <!-- Calculation count of sums files. -->
+        <resourcecount property="count.sums">
+            <fileset dir="${target.sum.dir}">
+                <include name="*.sum" />
+            </fileset>
+        </resourcecount>
+        <log message="There are ${count.sums} sumfiles in `${target.sum.dir}`." />
+
+        <!-- Check difference betweens count of sum files and zip files. -->
+        <if>
+            <not>
+                <equals arg1="${count.sums}" arg2="${count.zips}" />
+            </not>
+            <then>
+                <log level="error" message="Difference betweens ${count.sums} sumfiles and ${count.zips} zipfiles files." />
+            </then>
+        </if>
+
+        <log message="Archive photos done." />
+    </target>
+
+    <!-- Build. -->
+    <target name="build" depends="archive-photos,print-statiscs" />
+
+</project>
