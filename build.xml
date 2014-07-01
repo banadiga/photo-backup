@@ -1,3 +1,4 @@
+<?xml version="1.0" ?>
 <project name="Photo backup" basedir="." default="build">
 
     <!-- Load configuration prolert from file. -->
@@ -27,6 +28,25 @@
         </sequential>
     </macrodef>
 
+    <macrodef name="zip-with-password">
+        <attribute name="password" />
+        <attribute name="srcTar" />
+        <attribute name="srcSum" />
+        <attribute name="des" />
+        <sequential>
+            <exec executable="zip">
+                <arg value="-qXr9Dj"/>
+                <arg value="--split-size"/>
+                <arg value="${split.size}"/>
+                <arg value="-P"/>
+                <arg value="@{password}"/>
+                <arg value="@{des}"/>
+                <arg value="@{srcTar}"/>
+                <arg value="@{srcSum}"/>
+            </exec>
+        </sequential>
+    </macrodef>
+
     <!-- Remove build directory. -->
     <target name="clean">
         <log message="Removing `${build.dir}` directory." />
@@ -47,13 +67,19 @@
 
         <!-- Patterns for photo file names which should be taken into account. -->
         <patternset id="photo-files">
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.BMP" />
             <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.JPG" />
-            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.RAW" />
-            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.NEF" />
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.JPEG" />
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.PNG" />
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.TIF" />
 
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.Jpg" />
+
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.bmp" />
             <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.jpg" />
-            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.raw" />
-            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.nef" />
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.png" />
+            <include name="${this.year}${date.separator}${this.month}${date.separator}*/*.tif" />
+
         </patternset>
 
         <!-- Get list of files. -->
@@ -131,9 +157,9 @@
         <log level="warning" message="There are ${count.files} photo files in `${this.month}.${this.year}`" />
 
         <!-- Create arhive with photo files. -->
-        <property name="tar.file" location="${build.dir}/${this.year}${date.separator}${this.month}.tar" />
-        <property name="zip.file" location="${build.dir}/${this.year}${date.separator}${this.month}.zip" />
         <log message="Creating tar archive..." />
+        <property name="tar.file" location="${target.tar.dir}/${this.year}${date.separator}${this.month}.tar" />
+        <property name="zip.file" location="${target.zip.dir}/${this.year}${date.separator}${this.month}.zip" />
 
         <tar destFile="${tar.file}" compression="none">
             <fileset dir="${dir}">
@@ -141,16 +167,11 @@
             </fileset>
         </tar>
 
-        <log message="Creating zip archive..." />
-        <zip destFile="${zip.file}" compress="false" baseDir="${build.dir}" includes="${this.year}${date.separator}${this.month}.tar" />
+        <log message="Creating zip archive  with password." />
+        <zip-with-password password="${zip.password}" srcTar="${tar.file}" srcSum="${build.checksum.dir}/${checksum.file}" des="${zip.file}" />
 
-        <!-- Move archives to target directory -->
         <log message="Copying checksum file to target directory." />
         <copy file="${build.checksum.dir}/${checksum.file}" toDir="${target.sum.dir}" />
-
-        <log message="Copying zip file to target directory" />
-        <copy file="${zip.file}" toDir="${target.zip.dir}" />
-
     </target>
 
     <!-- Check if directory for selected year exists. -->
@@ -191,7 +212,7 @@
         <!-- Calculation count of zips files. -->
         <resourcecount property="count.zips">
             <fileset dir="${target.zip.dir}">
-                <include name="*.zip" />
+                <include name="*/*.zip" />
             </fileset>
         </resourcecount>
         <log message="There are ${count.zips} zipfiles in `${target.zip.dir}`." />
@@ -203,16 +224,6 @@
             </fileset>
         </resourcecount>
         <log message="There are ${count.sums} sumfiles in `${target.sum.dir}`." />
-
-        <!-- Check difference betweens count of sum files and zip files. -->
-        <if>
-            <not>
-                <equals arg1="${count.sums}" arg2="${count.zips}" />
-            </not>
-            <then>
-                <log level="error" message="Difference betweens ${count.sums} sumfiles and ${count.zips} zipfiles files." />
-            </then>
-        </if>
 
         <log message="Archive photos done." />
     </target>
