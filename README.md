@@ -1,16 +1,16 @@
 Photo backup
 ============
-Script create backups of photos. Script create check sum of mounth's photo. If sum is change create tar acrhive. After that create zip archive with password.
+Script creating backups of photos. Script create check sum of month's photo. If sum is changed create tar acrhive. After that create zip archive with password.
 Photo means file with following extension: BMP, bmp, JPG, JPEG, Jpg, jpg, NEF, nef, PNG, png, TIF and tif
 
 Structure of photos directory shoud be:
-* First dir evel is **year** - year in format *YYYY*
-* Sub dir in year is **mounth** - mounth in year in format *YYYY.MM.DD SOME TEXT*
+* First dir level is **year** - year in format *YYYY*
+* Sub dir in year is **mounth** - month in year in format *YYYY.MM.DD SOME TEXT*
 
 
-Install
--------
-Script use ant and zip.
+Installation
+------------
+Script uses ant and zip.
 * Install Apache Ant:
 ```
 $ sudo apt-get install ant
